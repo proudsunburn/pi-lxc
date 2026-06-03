@@ -8,7 +8,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Self-contained installer — uses build.func's build_container() for everything,
 # then does its own install since pi-install.sh isn't in the community repo.
 
-APP="Pi"
+APP="piagent"
 var_tags="${var_tags:-ai;automation;agent}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-4096}"
