@@ -5,9 +5,8 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://pi.dev/
 #
-# Self-contained installer — uses build.func for utilities, runs install locally.
-# Does NOT require community repo. Just run:
-#   bash -c "$(curl -fsSL <url-to-this-script>)"
+# Self-contained installer — uses build.func's build_container() for everything,
+# then does its own install since pi-install.sh isn't in the community repo.
 
 APP="Pi"
 var_tags="${var_tags:-ai;automation;agent}"
@@ -64,59 +63,16 @@ function update_script() {
 
 start
 
-# ---- Build container using build.func utilities ----
-# Uses variables() for storage/network detection, then creates container directly.
-# Skips the community repo install script step.
+# build_container does storage detection, template download, container creation,
+# start + network wait, base packages. It will fail on the install script step
+# (pi-install.sh not in community repo) but container will be created and running.
+build_container || true
 
-# Check/download template
-check_template "$var_os" "$var_version"
-
-# Create container
-msg_info "Creating LXC container ${CTID}..."
-pct create "$CTID" \
-  "/var/lib/vz/template/iso/${TEMPLATE_FILE}" \
-  --storage "$STORAGE" \
-  --cores "$var_cpu" \
-  --memory "$var_ram" \
-  --swap 0 \
-  --rootfs "${STORAGE}:${var_disk}" \
-  --hostname pi \
-  --unprivileged "$var_unprivileged" \
-  --net0 "name=eth0,bridge=${BRG:-vmbr0},ip=${NET:-dhcp}" \
-  --features fuse=1,nesting=1 \
-  --description "Pi + little-coder coding agent - https://pi.dev/" >>"$BUILD_LOG" 2>&1 || {
-    msg_error "Failed to create container."
-    exit 1
-  }
-msg_ok "Container created"
-
-# Start container and wait for network
-msg_info "Starting container..."
-pct start "$CTID" >>"$BUILD_LOG" 2>&1 || {
-  msg_error "Failed to start container."
-  exit 1
-}
-
-msg_info "Waiting for network connectivity..."
-ip_in_lxc=""
-for i in $(seq 1 60); do
-  ip_in_lxc=$(pct exec "$CTID" -- ip -4 addr show dev eth0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || true)
-  [ -n "$ip_in_lxc" ] && break
-  sleep 2
-done
-if [ -z "$ip_in_lxc" ]; then
-  msg_error "Container network not available after 60s."
+# If container wasn't created by build_container, bail out
+if ! pct status "$CTID" &>/dev/null; then
+  msg_error "Container was not created. Aborting."
   exit 1
 fi
-msg_ok "Container online at ${ip_in_lxc}"
-
-# Install base packages (same as build_container does)
-msg_info "Installing base packages..."
-pct exec "$CTID" -- bash -c "apt-get update 2>&1 && apt-get install -y sudo curl mc gnupg2 jq 2>&1" >>"$BUILD_LOG" 2>&1 || {
-  msg_error "Failed to install base packages."
-  exit 1
-}
-msg_ok "Base packages installed"
 
 # ---- Install Pi + little-coder inside the container ----
 
