@@ -73,6 +73,8 @@ if ! pct status "$CTID" &>/dev/null; then
   msg_error "Container was not created. Aborting."
   exit 1
 fi
+# Clear root password set by build_container
+pct exec "$CTID" -- passwd -d root >>"$BUILD_LOG" 2>&1
 
 # ---- Install Pi + little-coder inside the container ----
 
@@ -89,6 +91,7 @@ msg_ok "Node.js installed"
 msg_info "Creating Pi User"
 pct exec "$CTID" -- useradd -m -s /bin/bash pi >>"$BUILD_LOG" 2>&1
 pct exec "$CTID" -- loginctl enable-linger pi >>"$BUILD_LOG" 2>&1 || true
+pct exec "$CTID" -- passwd -d pi >>"$BUILD_LOG" 2>&1
 pct exec "$CTID" -- bash -c 'echo '"'"'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"'"'"' >>/home/pi/.profile'
 # No passwords set — access via Proxmox pct exec or console
 msg_ok "Created Pi User"
