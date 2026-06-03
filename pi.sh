@@ -125,6 +125,10 @@ pct exec "$CTID" -- chown -R pi:pi /home/pi
 pct exec "$CTID" -- chmod 750 /home/pi
 pct exec "$CTID" -- chmod 700 /home/pi/.local || true
 msg_ok "Installed Pi"
+pct exec "$CTID" -- apt-get install -y git >>"$BUILD_LOG" 2>&1 || {
+  msg_error "Failed to install git."
+  exit 1
+}
 
 msg_info "Cloning little-coder repository..."
 pct exec "$CTID" -- bash -c '
