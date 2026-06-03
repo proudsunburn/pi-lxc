@@ -20,7 +20,6 @@ APP="Pi + little-coder"
 BRG="${BRG:-vmbr0}"
 CTID="${CTID:-$(pvesh get /cluster/nextid)}"
 STORAGE="${STORAGE:-local-lvm}"
-TEMPLATE="debian-13-standard_13.0-*.tar.zst"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-4096}"
 var_disk="${var_disk:-20}"
@@ -31,18 +30,49 @@ LITTLE_CODER_REPO="https://github.com/itayinbarr/little-coder.git"
 LITTLE_CODER_DIR="/home/pi/little-coder"
 
 # ---- Colors ----
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-BOLD='\033[1m'
-TAB='    '
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[0;33m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
+BOLD=$'\033[1m'
+TAB=$'    '
 
-msg_info()  { echo -e "${CYAN}\u2192${NC} $1"; }
-msg_ok()    { echo -e "${GREEN}\u2713${NC} $1"; }
-msg_warn()  { echo -e "${YELLOW}\u26a0${NC} $1"; }
-msg_error() { echo -e "${RED}\u2717${NC} $1"; }
+# Box drawing chars
+ULC=$'\u250c'  # upper left corner
+URC=$'\u2510'  # upper right corner
+LLC=$'\u2514'  # lower left corner
+LRC=$'\u2518'  # lower right corner
+HL=$'\u2500'    # horizontal line
+VL=$'\u2502'    # vertical line
+HMC=$'\u252c'   # horizontal middle
+VHC=$'\u2534'   # vertical horizontal cross
+
+msg_info()  { printf "%b\u2192%b %s\n" "$CYAN" "$NC" "$1"; }
+msg_ok()    { printf "%b\u2713%b %s\n" "$GREEN" "$NC" "$1"; }
+msg_warn()  { printf "%b\u26a0%b %s\n" "$YELLOW" "$NC" "$1"; }
+msg_error() { printf "%b\u2717%b %s\n" "$RED" "$NC" "$1"; }
+
+print_banner() {
+  local line="${ULC}$(printf "${HL}%.0s" {1..62})${URC}"
+  local mid="${VHC}${HL}$(printf "${HL}%.0s" {1..62})${HMC}"
+  local bot="${LLC}$(printf "${HL}%.0s" {1..62})${LRC}"
+  printf "%b%s%b\n" "$CYAN" "$BOLD" "$NC"
+  printf "%s\n" "$line"
+  printf "%s %b%s%s %s\n" "$VL" "$NC" " \u2694 Pi + little-coder Installer" "$NC" "$VL"
+  printf "%s\n" "$mid"
+  printf "%s %bCoding agent with 20 extensions + 30 skills.%b %s\n" "$VL" "$NC" "$NC" "$VL"
+  printf "%s\n" "$bot"
+}
+
+print_success() {
+  local line="${ULC}$(printf "${HL}%.0s" {1..62})${URC}"
+  local bot="${LLC}$(printf "${HL}%.0s" {1..62})${LRC}"
+  printf "%b%s%b\n" "$GREEN" "$BOLD" "$NC"
+  printf "%s\n" "$line"
+  printf "%s %b\u2713 Installation Complete!%b %s\n" "$VL" "$NC" "$NC" "$VL"
+  printf "%s\n" "$bot"
+}
 
 # ---- Safety checks ----
 pve_check() {
@@ -92,30 +122,42 @@ function update_script() {
 # ---- Main ----
 pve_check
 root_check
-
-echo -e "${CYAN}${BOLD}"
-echo "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
-echo "|             \u2694 Pi + little-coder Installer                    |"
-echo "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"
-echo "|  Coding agent with 20 extensions + 30 skills.               |"
-echo "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
-echo -e "${NC}"
+print_banner
 
 # ---- Download template if missing ----
 msg_info "Checking LXC template..."
-if ! pveam list local | grep -q "$TEMPLATE"; then
+TEMPLATE_NAME="debian-13-standard_13.0-1_amd64.tar.zst"
+if ! pveam list local 2>/dev/null | grep -q "$TEMPLATE_NAME"; then
   msg_info "Downloading Debian 13 template..."
-  pveam download local "$TEMPLATE" || {
-    msg_error "Failed to download template."
-    exit 1
-  }
+  # Try exact name first, fall back to searching available templates
+  if ! pveam download local "$TEMPLATE_NAME" 2>/dev/null; then
+    # Search for the actual template name
+    ACTUAL_TEMPLATE=$(pveam available | grep -i "debian-13-standard" | head -1 | awk '{print $NF}' || true)
+    if [ -n "$ACTUAL_TEMPLATE" ]; then
+      msg_info "Found template: $ACTUAL_TEMPLATE"
+      pveam download local "$ACTUAL_TEMPLATE" || {
+        msg_error "Failed to download template."
+        exit 1
+      }
+      TEMPLATE_NAME="$ACTUAL_TEMPLATE"
+    else
+      msg_error "Could not find Debian 13 template. Available templates:"
+      pveam available | grep -i debian | head -10
+      exit 1
+    fi
+  fi
 fi
-msg_ok "Template ready"
+msg_ok "Template ready ($TEMPLATE_NAME)"
 
 # ---- Create container ----
 msg_info "Creating LXC container ${CTID}..."
+# Find the actual template file path
+TEMPLATE_FILE=$(pveam list local | grep "$TEMPLATE_NAME" | sed 's/^local://' || true)
+if [ -z "$TEMPLATE_FILE" ]; then
+  TEMPLATE_FILE="${TEMPLATE_NAME}"
+fi
 pct create "$CTID" \
-  /var/lib/vz/template/iso/$(pveam list local | grep -oP '(?<=local:).*$') \
+  "/var/lib/vz/template/iso/${TEMPLATE_FILE}" \
   --storage "$STORAGE" \
   --cores "$var_cpu" \
   --memory "$var_ram" \
@@ -244,8 +286,8 @@ msg_info "Configuring login hints..."
 pct exec "$CTID" -- bash -c '
 cat <<HINT >/etc/profile.d/pi-hint.sh
 if [[ "$(id -u)" -eq 0 ]]; then
-  echo "  Run \x27pi-setup\x27 to configure your API key and start using Pi."
-  echo "  Use \x27su - pi\x27 (with the dash) to switch to the pi user."
+  echo "  Run pi-setup to configure your API key and start using Pi."
+  echo "  Use su - pi (with the dash) to switch to the pi user."
 fi
 HINT
 '
@@ -253,11 +295,7 @@ msg_ok "Login hints configured"
 
 # ---- Done ----
 echo
-echo -e "${GREEN}${BOLD}"
-echo "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
-echo "|              \u2713 Installation Complete!                       |"
-echo "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
-echo -e "${NC}"
+print_success
 echo
 echo -e "${CYAN}${BOLD}Files:${NC}"
 echo -e "   ${YELLOW}Pi:${NC}        /home/pi/.local/lib/node_modules/@earendil-works/pi-coding-agent/"
