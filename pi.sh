@@ -47,7 +47,7 @@ function update_script() {
   msg_info "Updating Pi"
   $STD setsid --wait bash -c '
     set -a; source /etc/default/pi; set +a
-    npm install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent
+    npm install -g --prefix /home/pi/.local --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent
   '
   chown -R pi:pi /home/pi
   msg_ok "Updated Pi"
@@ -76,9 +76,9 @@ fi
 
 # ---- Install Pi + little-coder inside the container ----
 
-msg_info "Installing Node.js 22..."
+msg_info "Installing Node.js..."
 pct exec "$CTID" -- bash -c '
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_26.x | sudo -E bash -
 apt-get install -y nodejs
 ' >>"$BUILD_LOG" 2>&1 || {
   msg_error "Failed to install Node.js."
@@ -116,14 +116,14 @@ msg_info "Installing Pi"
 pct exec "$CTID" -- bash -c '
   set -a; source /etc/default/pi; set +a
   export npm_config_yes=true
-  npm install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent
+  npm install -g --prefix /home/pi/.local --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent
 ' >>"$BUILD_LOG" 2>&1 || {
   msg_error "Failed to install Pi."
   exit 1
 }
 pct exec "$CTID" -- chown -R pi:pi /home/pi
 pct exec "$CTID" -- chmod 750 /home/pi
-pct exec "$CTID" -- chmod 700 /home/pi/.local
+pct exec "$CTID" -- chmod 700 /home/pi/.local || true
 msg_ok "Installed Pi"
 
 msg_info "Cloning little-coder repository..."
@@ -145,7 +145,7 @@ cd /home/pi/little-coder
 /home/pi/.local/bin/pi init
 chown -R pi:pi /home/pi
 chmod 750 /home/pi
-chmod 700 /home/pi/.local
+chmod 700 /home/pi/.local || true
 echo \"Pi setup complete. File permissions restored.\"
 SETUP
 chmod +x /usr/bin/pi-setup"
