@@ -66,8 +66,6 @@ start
 # build_container does storage detection, template download, container creation,
 # start + network wait, base packages. It will fail on the install script step
 # (pi-install.sh not in community repo) but container will be created and running.
-# No root password — empty var_pw skips password in build_container
-var_pw=""
 build_container || true
 
 # If container wasn't created by build_container, bail out
@@ -75,6 +73,9 @@ if ! pct status "$CTID" &>/dev/null; then
   msg_error "Container was not created. Aborting."
   exit 1
 fi
+
+# Set root password
+pct exec "$CTID" -- bash -c "echo 'root:1234' | chpasswd"
 
 # ---- Install Pi + little-coder inside the container ----
 
@@ -92,6 +93,7 @@ msg_info "Creating Pi User"
 pct exec "$CTID" -- useradd -m -s /bin/bash pi >>"$BUILD_LOG" 2>&1
 pct exec "$CTID" -- loginctl enable-linger pi >>"$BUILD_LOG" 2>&1 || true
 pct exec "$CTID" -- bash -c 'echo '"'"'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"'"'"' >>/home/pi/.profile'
+pct exec "$CTID" -- bash -c "echo 'pi:1234' | chpasswd"
 msg_ok "Created Pi User"
 
 msg_info "Configuring Service Environment"
